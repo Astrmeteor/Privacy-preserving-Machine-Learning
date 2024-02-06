@@ -97,7 +97,7 @@ def histogram_query():
 
 
 def number_of_people():
-    adult = pd.read_csv("adult.csv")
+    adult = pd.read_csv("../Data/adult.csv")
 
     print("Married-civ-spouse: " + str(len([i for i in adult["marital-status"] if i == "Married-civ-spouse"])))
     print("Never-married: " + str(len([i for i in adult["marital-status"] if i == "Never-married"])))
