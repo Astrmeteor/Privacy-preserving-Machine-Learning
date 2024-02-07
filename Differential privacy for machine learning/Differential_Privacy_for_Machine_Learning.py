@@ -34,7 +34,7 @@ def counting_query():
     # URL of the dataset
     data_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data"
     # Local file name to save the data
-    local_file_name = "adult.data"
+    local_file_name = "../Data/adult.data"
 
     # Download the dataset if not already downloaded
     download_dataset(data_url, local_file_name)
