@@ -150,13 +150,17 @@ def number_of_people_in_each_occupation_domain():
     # After applying perturbation for the direct encoding
     perturbed_ans = pd.DataFrame([encoding_perturbation(domain, encoding(domain, i)) for i in adult_occupation])
     num_occ_per = perturbed_ans.value_counts().sort_index()
-    print("The number of people of each occupation with perturbation after direct encoding:")
+    print("\nThe number of people of each occupation with perturbation after direct encoding:")
     print(num_occ_per)
 
     num_occ_per.index = num_occ_per.index.get_level_values(0)
     difference = num_occ - num_occ_per
-    print("After perturbation, the difference between perturbed and actual numbers")
+    print("\nAfter perturbation, the difference between perturbed and actual numbers")
     print(difference)
+
+    print("\nApplying aggregation and estimation to direct encoding")
+    estimated_answers = direct_encoding_aggregation_and_estimation(domain, perturbed_ans)
+    print(list(zip(domain, estimated_answers)))
 
 
 def encoding(domain, answer):
@@ -174,6 +178,17 @@ def encoding_perturbation(domain, encoded_ans, epsilon=5.0):
     else:
         s2 = np.random.randint(0, d - 1)
         return domain[(encoded_ans + s2) % d]
+
+
+def direct_encoding_aggregation_and_estimation(domain, answers, epsilon=5.0):
+    n = len(answers)
+    d = len(domain)
+    p = pow(math.e, epsilon) / (d - 1 + pow(math.e, epsilon))
+    q = (1.0 - p) / (d - 1.0)
+
+    aggregator = answers.value_counts().sort_index()
+
+    return [max(int((i - n * q) / (p - q)), 1) for i in aggregator]
 
 
 if __name__ == "__main__":
