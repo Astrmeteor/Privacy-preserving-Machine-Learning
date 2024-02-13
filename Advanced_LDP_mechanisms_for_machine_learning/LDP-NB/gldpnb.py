@@ -8,11 +8,22 @@ import pandas as pd
 import numpy as np
 from math import ceil
 import sys
+import os
+
+# 获取当前脚本文件的完整路径
+script_path = os.path.abspath(__file__)
+
+# 获取脚本所在目录的路径
+script_dir = os.path.dirname(script_path)
+
+# 将当前工作目录更改为脚本所在目录
+os.chdir(script_dir)
+
 
 # Class LDP-Naive Bayes
 class ldpnb:
-
-    def __init__(self, **kwargs): # dataFrame=None, lblCol=None, X = None, y = None):
+    # dataFrame=None, lblCol=None, X = None, y = None):
+    def __init__(self, **kwargs):
         if 'X' in kwargs and 'y' in kwargs:
             dataFrame = pd.DataFrame(np.column_stack((kwargs['y'], kwargs['X'])))
             lblCol = "first"
@@ -34,6 +45,44 @@ class ldpnb:
         # Go over the columns of X, & convert to numerical values
         # Save the dictionary to translate from/to
         self.prepData(dfX, dfy)
+        # Initialize several parameters
+        self.eps = None
+        self.fDict = None
+        self.fMap = None
+        self.numX = None
+        self.labels = None
+        self.classes = None
+        # Encoding method
+        self.method = None
+        # inflate tmpX and labels, feature column number
+        self.infX = None
+        self.infy = None
+        self.infFeatColNum = None
+        # How many columns were used for features, and for classes
+        self.featColNum = None
+        self.clColNum = None
+        # Initialize the matrix: #samples x (#classes * (#features + 1label) )
+        self.fullMat = None
+        # start with the test data, training data
+        self.tstX = None
+        self.tsty = None
+        self.trFullMat = None
+        # the probabilities p & q
+        self.p0 = None
+        self.q0 = None
+        self.p1 = None
+        self.p2 = None
+        self.p = None
+        self.q = None
+        # the perturbed matrix
+        self.ldpMat = None
+        # Estimate the class labels sum
+        self.estClSum = None
+        # Adjust the values by subtracting the randomly added values
+        self.estAttSum = None
+        # Initialize probability vectors
+        self.attProb = None
+        self.clProb = None
 
     # prepData: converts data to numerical, and store the mapping
     # Output: fDict {feat1 Idx: ['catVal1', 'catVal2'], feat2 Idx: ['catVal1', 'catVal2']}
@@ -60,7 +109,7 @@ class ldpnb:
         y = dfy.astype('category')
         self.labels = np.array(y.cat.codes)
         self.classes = y.cat.categories.tolist()
-        
+
         # Regardless of whether we will have "DE" or other encoding methods, we
         # will create a unary encoded matrix (will be used for testing)
         # Basically, inflate tmpX and labels to 1s and 0s
@@ -78,7 +127,7 @@ class ldpnb:
         self.infy[np.arange(self.labels.shape[0]), self.labels.astype(int)] = 1
         # The next parameter WILL PROBABLY BE USED in testing phase
         self.infFeatColNum = self.infX.shape[1]
-    
+
     # Encode the data into the proper format
     def encode(self, encoding):
         # Encoding Method
@@ -90,11 +139,11 @@ class ldpnb:
         else:
             X = self.infX
             y = self.infy
-        
+
         # How many columns were used for features, and for classes
         self.featColNum = X.shape[1]
         self.clColNum = 1 if self.method == "DE" else y.shape[1]
-        
+
         # Create the encoded data matrix
         # Initialize the matrix: #samples x (#classes * (#features + 1label) )
         self.fullMat = np.zeros((X.shape[0], (self.featColNum * len(self.classes) ) + self.clColNum))
@@ -110,8 +159,8 @@ class ldpnb:
                     rndVec = np.random.randint(attCount, size=X.shape[0])
                     self.fullMat[np.arange(X.shape[0]), fColIdx + rndVec.astype(int)] = 1
                     # Increment the column index (fVal is the feature's number of categories)
-                    fColIdx += attCount                
-        
+                    fColIdx += attCount
+
         # Format the data as: sample-of-class0|sample-of-class1|labels
         for i in range(X.shape[0]):
             # Check the label of this sample, and set the corresponding columns
@@ -124,7 +173,7 @@ class ldpnb:
             self.fullMat[:, clInd] = y
         else:
             self.fullMat[:, clInd:(clInd+self.clColNum)] = y
-    
+
     # Split into training and testing data (When no randomization is required)
     def trainTestFixedSplit(self, trCount, tstCount):
         # If the passed training and testing counts are wrong, just exit()
@@ -132,7 +181,7 @@ class ldpnb:
             exit()
         # start with the test data
         self.tstX = self.infX[trCount:, :]
-        self.tsty = self.labels[trCount:] 
+        self.tsty = self.labels[trCount:]
         # then the training data
         self.trFullMat = self.fullMat[:trCount, :]
 
@@ -148,7 +197,7 @@ class ldpnb:
         indices = np.random.permutation(self.numX.shape[0])
         # Split indices into training and testing
         trIdx, tstIdx = indices[:trCount], indices[trCount:]
-        
+
         # start with the test data
         self.tstX = self.infX[tstIdx, :]
         self.tsty = self.labels[tstIdx] # self.infy[tstIdx, :]
@@ -156,7 +205,7 @@ class ldpnb:
         # Compute the multiple we need from the original one
         tmpMat = self.fullMat[trIdx, :]
         reqMult = int(ceil(trSize / tmpMat.shape[0]))
-        print "REQUESTED", reqMult
+        print(f"REQUESTED" + str(reqMult))
         # repeats the data reqMult times
         self.trFullMat = np.repeat(tmpMat, reqMult, axis=0)
         self.trFullMat = self.trFullMat[:trSize, :]
@@ -192,11 +241,11 @@ class ldpnb:
             # For estimator [ estimateSum() called by pertrub() ]
             self.p = self.p1
             self.q = self.q0
-        ## For SHE, laplace noise is used (so, we don't need epsToProb)
+        # For SHE, laplace noise is used (so, we don't need epsToProb)
         if self.method == "THE":
             self.p = 1 - (0.5 * np.exp( (self.eps * (th - 1) ) / 2 ))
             self.q = 0.5 * np.exp( (-0.5 * self.eps * th) / 2 )
-    
+
     def perturb(self, eps, thresh=1):
         np.random.seed()
         # Initialize the perturbed matrix
@@ -263,7 +312,8 @@ class ldpnb:
                 self.epsToProb(th=thresh)
 
     # Estimate the sum using equation (1) in Wang's paper
-    def estimateSum(self, obsSum, n, p, q, suppressNeg=True):
+    @staticmethod
+    def estimateSum(obsSum, n, p, q, suppressNeg=True):
         estSum = (obsSum - (n * q)) / (p - q)
         if suppressNeg:
             if type(estSum) is np.ndarray:
@@ -302,7 +352,8 @@ class ldpnb:
                     # Move to the next attribute starting index in attSum vector
                     attSumIdx += attCount
         # Other methods share the same matrix structure
-        else: # Methods: "SUE", "OUE", "SHE", "THE"
+        else:
+            # Methods: "SUE", "OUE", "SHE", "THE"
             # First, compute class counts
             # Find the index of the labels column
             ind = len(self.classes) * self.featColNum
@@ -313,10 +364,9 @@ class ldpnb:
                 # Starting col. index for current class
                 dtCol = clInd * self.featColNum
                 # Get the count of each feature (belonging to class clInd)
-                obsAttSum[clInd, :] = np.sum(self.ldpMat[:,dtCol:(dtCol+self.featColNum)], axis=0)
+                obsAttSum[clInd, :] = np.sum(self.ldpMat[:, dtCol:(dtCol+self.featColNum)], axis=0)
 
-
-        # # Adjust the values by substracting the randomly added values
+        # # Adjust the values by subtracting the randomly added values
         # obsAttSum = self.adjustAttValues(obsClSum, obsAttSum, suppressNeg=False)
 
         # (2) ADJUST the OBSERVED SUMS using p & q to obtain the ESTIMATED SUMS
@@ -325,12 +375,12 @@ class ldpnb:
         # If it's SHE, summation by itself is enough
         if self.method == "SHE":
             self.estAttSum = obsAttSum
-            self.estClSum  = obsClSum
+            self.estClSum = obsClSum
         # Other than SHE, we need to adjust the observed sum ("DE", "SUE", "OUE", "THE")
         # The same estimator is used, but using different p & q
         if self.method in ["SUE", "OUE", "THE"]:
             self.estAttSum = self.estimateSum(obsAttSum, self.ldpMat.shape[0], self.p, self.q)
-            self.estClSum  = self.estimateSum(obsClSum, self.ldpMat.shape[0], self.p, self.q)
+            self.estClSum = self.estimateSum(obsClSum, self.ldpMat.shape[0], self.p, self.q)
         # For "DE", each feature was randomized differently according to its domain
         # So, we need to get the p & q for each feature
         if self.method == "DE":
@@ -347,15 +397,15 @@ class ldpnb:
                 # Set the appropriate columns in estAttSum
                 # clCnt is the starting index of current feature in attSum vector
                 self.estAttSum[:, attSumIdx:(attSumIdx+attCount)] = \
-                    self.estimateSum(obsAttSum[:, attSumIdx:(attSumIdx+attCount)], \
-                        self.ldpMat.shape[0], p, q)
+                    self.estimateSum(obsAttSum[:, attSumIdx:(attSumIdx+attCount)],
+                                     self.ldpMat.shape[0], p, q)
                 # Move to the next attribute starting index in attSum vector
                 attSumIdx += attCount
-        
-        # Adjust the values by substracting the randomly added values
+
+        # Adjust the values by subtracting the randomly added values
         self.estAttSum = self.adjustAttValues(self.estClSum, self.estAttSum)
 
-    # Adjust the values by substracting the randomly added values
+    # Adjust the values by subtracting the randomly added values
     def adjustAttValues(self, clSum, attSum, suppressNeg=True):
         for clInd in range(len(self.classes)):
             fColIdx = 0
@@ -366,16 +416,18 @@ class ldpnb:
                 fColIdx += attCount
         if suppressNeg:
             if type(attSum) is np.ndarray:
-                attSum[attSum <= 0] = 1 # at least one sample
+                # at least one sample
+                attSum[attSum <= 0] = 1
             elif attSum <= 0:
-                attSum = 1 # at least one sample
+                # at least one sample
+                attSum = 1
         return attSum
-    
+
     # Find the probability of each attribute, and class
     def train(self):
         # Initialize probability vectors
         self.attProb = np.zeros(self.estAttSum.shape)
-        self.clProb  = np.zeros(self.estClSum.shape)
+        self.clProb = np.zeros(self.estClSum.shape)
         # First: Classes' probabilities
         self.clProb = self.estClSum / np.sum(self.estClSum)
         # Second: Attribute probabilities
@@ -388,7 +440,7 @@ class ldpnb:
                         np.sum(self.estAttSum[clInd, attProbIdx:(attProbIdx+attCount)])
                 # Move to the next attribute starting index in attSum vector
                 attProbIdx += attCount
-    
+
     # Testing NB
     def test(self):
         resClass = [None] * self.tstX.shape[0] # Create Empty list of length shape[0]
@@ -398,42 +450,58 @@ class ldpnb:
                 resProb[idx] = self.clProb[idx] * np.prod(self.attProb[idx, self.tstX[i] == 1])
             resClass[i] = np.argmax(resProb)
         return np.array(resClass)
-        
+
     def testAcc(self):
         predy = self.test()
         # Accuracy
         return 100 * (predy == self.tsty).sum() / len(predy)
 
-# ############################################################
-# ############################ Experiment
-# # Encoding Methods: 0 DE, 1 SUE, 2 OUE, 3 SHE, 4 THE
-# enc = ["DE", "SUE", "OUE", "SHE", "THE"]
-# # Pick a dataset
-# dtID = 0
-# dNames = ['sample', 'car', 'connect', 'mushroom', 'chess']
-# fileNames = ['datasets\\example-train.csv', 'datasets\\car.data.txt', \
-#     'datasets\\connect-4\\connect-4.data', \
-#     'datasets\\mushroom\\agaricus-lepiota.data.csv', \
-#     'datasets\\Chess\kr-vs-kp.data.txt']
-# lblCols = ["last", "last", "last", "first", "last"]
-# tstProp = [0.05, 0.06, 0.06, 0.06, 0.06]
-# rndSeed = [8204, 4397, 4219, 8, 5705]
-# 
-# # Read Data from File
-# filename = os.path.join(os.path.dirname(__file__), fileNames[dtID])
-# df = pd.read_csv(filename, sep='\s*,\s*', header=None, skiprows=1, encoding='ascii', engine='python') # header=0
-# 
-# # initialize the class nb: DataFrame, y-col, and encoding type
-# nb = ldpnb(df, lblCols[dtID])
-# 
-# nb.encode(enc[1])
-# 
-# nb.trainTestSplit(trPrcnt=0.65, randomState=42, trSize="def")
-# ###
-# nb.perturb(1)
-# 
-# nb.aggregate()
-# 
-# nb.train()
-# 
-# print "Accuracy =", nb.testAcc()
+
+if __name__ == "__main__":
+    # Experiment
+    # Encoding Methods: 0 DE, 1 SUE, 2 OUE, 3 SHE, 4 THE
+    enc = ["DE", "SUE", "OUE", "SHE", "THE"]
+
+    # Pick a dataset
+    dtID = 0
+    dNames = ['sample', 'car', 'connect', 'mushroom', 'chess']
+    file_path = "datasets"
+    fileNames = ['example-train.csv', 'car.data.txt', 'connect-4\\connect-4.data',
+                 'mushroom\\agaricus-lepiota.data.csv', 'Chess\\kr-vs-kp.data.txt']
+    fileNames = [os.path.join(file_path, dataset_name) for dataset_name in fileNames]
+    print(fileNames)
+
+    # The location of labels
+    lblCols = ["last", "last", "last", "first", "last"]
+    # Test probability
+    tstProp = [0.05, 0.06, 0.06, 0.06, 0.06]
+    # Random seed
+    rndSeed = [8204, 4397, 4219, 8, 5705]
+
+    # Read Data from File
+    # filename = os.path.join(os.path.dirname(__file__), fileNames[dtID])
+    filename = fileNames[dtID]
+    # header = 0
+    dataFrame = pd.read_csv(filename, sep='\s*,\s*', header=None, skiprows=1, encoding='ascii', engine='python')
+
+    # initialize the class nb: DataFrame, y-col, and encoding type
+    method = "sue"
+    nb = ldpnb(dataFrame=dataFrame, lblCol=lblCols[dtID])
+
+    # choose encoding method
+    nb.encode(enc[1])
+
+    # training set
+    # trPrcnt parameter determines what fraction of the entire dataset will be used as the training set
+    # randomState parameter ensures the reproducibility of the dataset split
+    # trSize parameter offers an option to directly specify the size of the training set
+    nb.trainTestSplit(trPrcnt=0.65, randomState=42, trSize="def")
+    # perturbation
+    epsilon = 1
+    nb.perturb(epsilon)
+    # aggregation
+    nb.aggregate()
+    # train
+    nb.train()
+
+    print(f"Accuracy = {nb.testAcc():.2f}%")
