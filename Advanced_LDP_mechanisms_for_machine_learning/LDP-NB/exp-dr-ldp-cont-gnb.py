@@ -1,3 +1,4 @@
+# LDP with continuous features
 from __future__ import division
 import numpy as np
 import ldp_gaussian_naive_bayes as nb # The github one
