@@ -204,7 +204,7 @@ def applying_sequential_composition():
 
 if __name__ == "__main__":
     # Laplac mechanism
-    # counting_query()
+    counting_query()
     # histogram_query()
 
     # Exponential mechanism

@@ -16,7 +16,8 @@ importlib.reload(nb)
 np.set_printoptions(precision=2)
 
 ################################################################################
-######### FUNCTIONS
+# FUNCTIONS
+
 
 def readDataset(dataset, perc=0.8):
     trainDataFile = os.path.join(os.path.dirname(__file__),
@@ -29,6 +30,7 @@ def readDataset(dataset, perc=0.8):
     trainy = y[:trNum]
     testy = y[trNum:]
     return trainX.toarray(), trainy, testX.toarray(), testy
+
 
 if __name__ == "__main__":
     ############################################################
@@ -52,7 +54,7 @@ if __name__ == "__main__":
     # epsilons = [0.1, 0.3, 0.4, 0.5, 0.6, 0.75, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10]
     epsilons = np.hstack((np.arange(0.05, 2, 0.2), np.arange(2, 11, 1)))
 
-    #################### read dataset #####################
+    # read dataset #####################
     trainX, trainy, testX, testy = readDataset(dtNames[dtID])
 
     # Dimensionality Reduction / OR NOT
@@ -77,7 +79,7 @@ if __name__ == "__main__":
         # Set the first column to this epsilon
         resMat[eidx+1, 0] = eps
 
-    #### Loop over the dimensions
+    # Loop over the dimensions
     for dind, dimLen in enumerate(dimList):
         # Dimensionality Reduction / OR NOT
         if drID == 0:
